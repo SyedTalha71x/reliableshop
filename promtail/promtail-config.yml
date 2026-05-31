@@ -1,0 +1,82 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Read all container logs from Docker's log directory
+  - job_name: containers
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: containerlogs
+          __path__: /var/log/containers/*.log
+    
+    # Use regex to extract container info from file path
+    pipeline_stages:
+      # Extract container name from file path
+      # /var/log/containers/cart-service_abc123.log -> cart-service
+      - regex:
+          expression: '.*/(?P<container_name>[^_]+)_.*\.log$'
+          source: __path__
+      
+      # Extract service name from container name
+      - regex:
+          expression: '(?P<service>cart|orders|payments|products)'
+          source: container_name
+      
+      # Add labels
+      - labels:
+          container_name:
+          service:
+      
+      # Parse Docker JSON log format
+      - json:
+          expressions:
+            log: log
+            stream: stream
+            attrs: attrs
+      
+      # Extract log level from message if present
+      - regex:
+          expression: '(?i)\b(?P<level>error|warn|info|debug)\b'
+          source: log
+      
+      - labels:
+          level:
+      
+      # Output the actual log message
+      - output:
+          source: log
+      
+      # Add timestamp
+      - timestamp:
+          source: time
+          format: RFC3339Nano
+
+
+  # Additional job for direct Docker logs (fallback)
+  - job_name: docker-logs-direct
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: dockerlogs
+          __path__: /var/lib/docker/containers/*/*.log
+    
+    pipeline_stages:
+      - regex:
+          expression: '.*/(?P<container_id>[^/]+)/.*\.log$'
+          source: __path__
+      - json:
+          expressions:
+            log: log
+            stream: stream
+      - output:
+          source: log

@@ -1,0 +1,42 @@
+# Environment variables
+.env
+.env.*
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+logs/
+
+# Docker
+*.tar
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Grafana data
+grafana/data/
+
+# Prometheus data
+prometheus_data/
+loki_data/
+tempo_data/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/

@@ -1,0 +1,116 @@
+groups:
+  - name: service-availability
+    interval: 30s
+    rules:
+
+      - alert: ServiceDown
+        expr: up{job=~".*-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is DOWN"
+          description: "{{ $labels.job }} has been unreachable for more than 1 minute."
+          runbook_url: "https://wiki.company.com/runbooks/service-down"
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(orders_requests_total{status=~"5.."}[5m])) by (job)
+          /
+          sum(rate(orders_requests_total[5m])) by (job)
+          > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Error rate is {{ $value | humanizePercentage }} — above 5% threshold."
+
+  - name: latency
+    rules:
+
+      - alert: HighP99Latency
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(orders_request_duration_seconds_bucket[5m])) by (le, endpoint)
+          ) > 1.0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 latency > 1s on endpoint {{ $labels.endpoint }}"
+          description: "99th percentile latency is {{ $value }}s — SLO breach."
+
+      - alert: PaymentLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(payments_duration_seconds_bucket[5m])) by (le)
+          ) > 2.0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Payment P95 latency exceeds 2s"
+          description: "Payment processing is degraded. P95={{ $value }}s."
+
+  - name: infrastructure
+    rules:
+
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU usage > 80% on {{ $labels.instance }}"
+          description: "CPU has been over 80% for 5 minutes."
+
+      - alert: HighMemoryUsage
+        expr: |
+          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+          / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory usage > 85% on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | humanize }}%."
+
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space below 15% on {{ $labels.instance }}"
+          description: "Only {{ $value | humanize }}% disk space remaining."
+
+  - name: business-metrics
+    rules:
+
+      - alert: HighPaymentFailureRate
+        expr: |
+          sum(rate(payments_total{status="failed"}[5m]))
+          /
+          sum(rate(payments_total[5m])) > 0.10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Payment failure rate exceeds 10%"
+          description: "{{ $value | humanizePercentage }} of payments are failing — revenue impact."
+
+      - alert: HighCartAbandonRate
+        expr: |
+          sum(rate(cart_abandoned_total[15m]))
+          /
+          (sum(rate(cart_abandoned_total[15m])) + sum(rate(cart_checkout_duration_seconds_count[15m])))
+          > 0.20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cart abandon rate > 20%"
+          description: "{{ $value | humanizePercentage }} of carts are being abandoned."
